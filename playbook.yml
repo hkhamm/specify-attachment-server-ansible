@@ -1,0 +1,53 @@
+---
+- hosts: all
+  vars:
+    username: vagrant
+    project_dir: /home/{{ username }}/web-asset-server
+  sudo: yes
+  tasks:
+    - name: terminal coloring - move .bashrc
+      sudo: no
+      copy: src=files/bashrc dest=/home/{{ username }}/.bashrc
+
+    - name: terminal coloring - source .bashrc
+      sudo: no
+      shell: . /home/{{ username }}/.bashrc
+
+    - name: apt-get update/upgrade
+      apt: upgrade=dist
+
+    - name: apt-get install pkgs
+      apt: pkg={{ item }} state=latest
+      with_items:
+        - git
+        - python-pip
+        - imagemagick
+        - ghostscript
+        - authbind
+
+    - name: git web-asset-server
+      git: repo=https://github.com/specify/web-asset-server.git
+           dest={{ project_dir }}
+
+    - name: setup web-asset-server
+      copy: src=files/settings.py dest=/{{ project_dir }}/settings.py
+            owner={{ username }} group={{ username }}
+
+    - name: pip install requirements
+      pip: requirements={{ project_dir }}/requirements.txt state=present
+
+    - name: provide the server with read+execute on port 80
+      file: dest=/etc/authbind/byport/80 state=touch mode=0500 owner=vagrant
+
+    - name: move and start web-asset-server service
+      template: src=files/web-asset-server.conf dest=/etc/init/web-asset-server.conf
+                mode=0644
+      notify:
+        - restart web-asset-server
+
+  handlers:
+    - name: restart web-asset-server
+      service: name=web-asset-server state=restarted
+
+    - name: restart tomcat7
+      service: name=tomcat7 state=restarted
